@@ -11,7 +11,14 @@ import { InsuranceInfo, MedicalBill } from '../lib/api';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showSettings, setShowSettings] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackData, setFeedbackData] = useState({
+    name: '',
+    email: '',
+    category: 'general',
+    rating: 5,
+    comments: ''
+  });
 
   const [insuranceInfo, setInsuranceInfo] = useState<InsuranceInfo>({
     insurance_type: 'private',
@@ -48,10 +55,10 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-4">
               <button 
-                onClick={() => setShowSettings(!showSettings)}
+                onClick={() => setShowFeedback(true)}
                 className="btn-secondary text-sm"
               >
-                Settings
+                Feedback
               </button>
             </div>
           </div>
@@ -132,14 +139,14 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Settings Modal */}
-      {showSettings && (
+      {/* Feedback Modal */}
+      {showFeedback && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Settings</h2>
+              <h2 className="text-lg font-semibold">Send Feedback</h2>
               <button 
-                onClick={() => setShowSettings(false)}
+                onClick={() => setShowFeedback(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
                 ✕
@@ -147,33 +154,92 @@ export default function Home() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">API Endpoint</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input
                   type="text"
-                  value={process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}
-                  readOnly
+                  value={feedbackData.name}
+                  onChange={(e) => setFeedbackData({...feedbackData, name: e.target.value})}
                   className="input-field"
-                  title="API Endpoint URL"
-                  placeholder="API Endpoint URL"
+                  title="Your Name"
+                  placeholder="Enter your name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Application Version</label>
-                <p className="text-sm text-gray-600">MedFin v1.0.0</p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={feedbackData.email}
+                  onChange={(e) => setFeedbackData({...feedbackData, email: e.target.value})}
+                  className="input-field"
+                  title="Your Email"
+                  placeholder="your.email@example.com"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Environment</label>
-                <p className="text-sm text-gray-600">
-                  {process.env.NODE_ENV === 'production' ? 'Production' : 'Development'}
-                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  value={feedbackData.category}
+                  onChange={(e) => setFeedbackData({...feedbackData, category: e.target.value})}
+                  className="input-field"
+                  title="Feedback Category"
+                >
+                  <option value="general">General</option>
+                  <option value="bug">Bug Report</option>
+                  <option value="feature">Feature Request</option>
+                  <option value="improvement">Improvement</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                <div className="flex items-center space-x-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackData({...feedbackData, rating: star})}
+                      className={`text-2xl ${star <= feedbackData.rating ? 'text-yellow-400' : 'text-gray-300'}`}
+                      title={`Rate ${star} star${star !== 1 ? 's' : ''}`}
+                    >
+                      ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Comments</label>
+                <textarea
+                  value={feedbackData.comments}
+                  onChange={(e) => setFeedbackData({...feedbackData, comments: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  rows={4}
+                  title="Your Feedback"
+                  placeholder="Share your thoughts, suggestions, or report issues..."
+                />
               </div>
             </div>
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-between space-x-3">
               <button 
-                onClick={() => setShowSettings(false)}
+                onClick={() => setShowFeedback(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  console.log('Feedback submitted:', feedbackData);
+                  alert('Thank you for your feedback! We appreciate your input.');
+                  setFeedbackData({
+                    name: '',
+                    email: '',
+                    category: 'general',
+                    rating: 5,
+                    comments: ''
+                  });
+                  setShowFeedback(false);
+                }}
                 className="btn-primary"
               >
-                Close
+                Send Feedback
               </button>
             </div>
           </div>
