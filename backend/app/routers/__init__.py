@@ -4,6 +4,7 @@ from .bills import router as bills_router
 from .navigation import router as navigation_router
 from .assistance import router as assistance_router
 from .payment_plans import router as payment_plans_router
+from .feedback import router as feedback_router
 
 __all__ = [
     "cost_router",
@@ -12,4 +13,5 @@ __all__ = [
     "navigation_router",
     "assistance_router",
     "payment_plans_router",
+    "feedback_router",
 ]

@@ -225,17 +225,37 @@ export default function Home() {
                 Cancel
               </button>
               <button 
-                onClick={() => {
-                  console.log('Feedback submitted:', feedbackData);
-                  alert('Thank you for your feedback! We appreciate your input.');
-                  setFeedbackData({
-                    name: '',
-                    email: '',
-                    category: 'general',
-                    rating: 5,
-                    comments: ''
-                  });
-                  setShowFeedback(false);
+                onClick={async () => {
+                  try {
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/feedback`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(feedbackData),
+                    });
+                    
+                    if (response.ok) {
+                      const result = await response.json();
+                      console.log('Feedback submitted:', result);
+                      alert(`Thank you for your feedback! Your feedback ID is: ${result.feedback_id}`);
+                      setFeedbackData({
+                        name: '',
+                        email: '',
+                        category: 'general',
+                        rating: 5,
+                        comments: ''
+                      });
+                      setShowFeedback(false);
+                    } else {
+                      const error = await response.json();
+                      console.error('Feedback submission failed:', error);
+                      alert('Failed to submit feedback. Please try again later.');
+                    }
+                  } catch (error) {
+                    console.error('Network error:', error);
+                    alert('Network error. Please check your connection and try again.');
+                  }
                 }}
                 className="btn-primary"
               >

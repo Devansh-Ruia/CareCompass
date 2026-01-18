@@ -8,6 +8,7 @@ from .routers import (
     navigation_router,
     assistance_router,
     payment_plans_router,
+    feedback_router,
 )
 
 
@@ -53,6 +54,12 @@ app.include_router(
     payment_plans_router,
     prefix=f"{settings.api_v1_prefix}/payment-plans",
     tags=["payment_plans"],
+)
+
+app.include_router(
+    feedback_router,
+    prefix=f"{settings.api_v1_prefix}/feedback",
+    tags=["feedback"],
 )
 
 
