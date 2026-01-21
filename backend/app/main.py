@@ -20,14 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(cost_router, prefix="/api/v1")
-app.include_router(insurance_router, prefix="/api/v1")
-app.include_router(bills_router, prefix="/api/v1")
-app.include_router(navigation_router, prefix="/api/v1")
-app.include_router(assistance_router, prefix="/api/v1")
-app.include_router(payment_plans_router, prefix="/api/v1")
-app.include_router(feedback_router, prefix="/api/v1")
-
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 @app.get("/")
 def root():
@@ -37,7 +32,10 @@ def root():
         "status": "operational",
     }
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+app.include_router(cost_router, prefix="/api/v1")
+app.include_router(insurance_router, prefix="/api/v1")
+app.include_router(bills_router, prefix="/api/v1")
+app.include_router(navigation_router, prefix="/api/v1")
+app.include_router(assistance_router, prefix="/api/v1")
+app.include_router(payment_plans_router, prefix="/api/v1")
+app.include_router(feedback_router, prefix="/api/v1")
