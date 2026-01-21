@@ -19,10 +19,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ ROOT-LEVEL HEALTH CHECK
+# ✅ ROOT HEALTH CHECK - MUST BE HERE BEFORE ROUTERS
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+# Routers MUST be included AFTER health
+from app.routers import (
+    cost_router,
+    insurance_router,
+    bills_router,
+    navigation_router,
+    assistance_router,
+    payment_plans_router,
+    feedback_router,
+)
 
 app.include_router(cost_router, prefix="/api/v1")
 app.include_router(insurance_router, prefix="/api/v1")
@@ -31,7 +42,6 @@ app.include_router(navigation_router, prefix="/api/v1")
 app.include_router(assistance_router, prefix="/api/v1")
 app.include_router(payment_plans_router, prefix="/api/v1")
 app.include_router(feedback_router, prefix="/api/v1")
-
 
 @app.get("/")
 async def root():
