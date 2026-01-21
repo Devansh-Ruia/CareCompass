@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     app_name: str = "MedFin API"
-    app_version: str = "1.0.0"
+    app_version: str = "1.0.1"
     debug: bool = False
 
     api_v1_prefix: str = "/api/v1"
