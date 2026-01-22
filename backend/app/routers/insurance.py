@@ -13,11 +13,26 @@ class InsuranceAnalysisRequest(BaseModel):
     bills: Optional[List[MedicalBill]] = None
 
 
+class BillsAnalysisRequest(BaseModel):
+    bills: List[MedicalBill]
+
+
 @router.post("/analyze")
 async def analyze_insurance(request: InsuranceAnalysisRequest):
     try:
         analysis = insurance_analyzer.analyze_insurance(
             insurance=request.insurance, bills=request.bills
+        )
+        return analysis
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/bills")
+async def analyze_bills(request: BillsAnalysisRequest):
+    try:
+        analysis = insurance_analyzer.analyze_insurance(
+            insurance=None, bills=request.bills
         )
         return analysis
     except Exception as e:
