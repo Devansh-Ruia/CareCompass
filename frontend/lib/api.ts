@@ -72,6 +72,7 @@ class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
+    console.log('API_BASE_URL:', API_BASE_URL); // Debug environment variable
     this.baseUrl = baseUrl;
   }
 
@@ -80,6 +81,7 @@ class ApiClient {
     options?: RequestInit
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    console.log('API Request URL:', url); // Debug logging
     const response = await fetch(url, {
       ...options,
       headers: {
