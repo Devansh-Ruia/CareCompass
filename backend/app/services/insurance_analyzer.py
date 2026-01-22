@@ -71,6 +71,43 @@ class InsuranceAnalysisService:
             "summary": self._generate_insurance_summary(coverage_status, gaps),
         }
 
+    def analyze_bills(self, bills: List[MedicalBill]) -> Dict[str, Any]:
+        """Analyze bills without insurance context"""
+        if not bills:
+            return {"issues": [], "total_billed": 0, "total_patient_responsibility": 0}
+        
+        total_billed = sum(bill.total_amount for bill in bills)
+        total_patient_responsibility = sum(bill.patient_responsibility for bill in bills)
+        
+        issues = []
+        
+        # Check for high patient responsibility
+        for bill in bills:
+            if bill.patient_responsibility > bill.total_amount * 0.5:
+                issues.append({
+                    "bill_id": getattr(bill, 'id', 'unknown'),
+                    "issue_type": "high_patient_responsibility",
+                    "description": f"Patient responsibility (${bill.patient_responsibility}) is over 50% of total bill (${bill.total_amount})",
+                    "severity": "high"
+                })
+        
+        # Check for missing insurance payments
+        for bill in bills:
+            if not bill.insurance_paid and bill.total_amount > 1000:
+                issues.append({
+                    "bill_id": getattr(bill, 'id', 'unknown'),
+                    "issue_type": "missing_insurance_payment",
+                    "description": f"No insurance payment recorded for large bill (${bill.total_amount})",
+                    "severity": "medium"
+                })
+        
+        return {
+            "issues": issues,
+            "total_billed": total_billed,
+            "total_patient_responsibility": total_patient_responsibility,
+            "bill_count": len(bills)
+        }
+
     def _assess_coverage_status(self, insurance: InsuranceInfo) -> Dict[str, Any]:
         deductible_progress = (
             (insurance.deductible_met / insurance.annual_deductible)
