@@ -5,7 +5,7 @@ from ..services.navigation_engine import navigation_engine
 from ..core.models import MedicalBill, InsuranceInfo, NavigationPlan
 
 
-router = APIRouter()
+router = APIRouter(prefix="/navigation", tags=["navigation"])
 
 
 class NavigationPlanRequest(BaseModel):
