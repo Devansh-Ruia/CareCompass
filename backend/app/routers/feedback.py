@@ -1,106 +1,68 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
-import json
+from typing import Optional
+import resend
 import os
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
-# Feedback data model
+# Initialize Resend with API key from environment
+resend.api_key = os.getenv("RESEND_API_KEY")
+
 class FeedbackRequest(BaseModel):
-    name: str
-    email: str
-    category: str
-    rating: int
-    comments: str
+    rating: int  # 1-5 stars
+    category: Optional[str] = "general"  # general, bug, feature, other
+    message: str
+    email: Optional[str] = None  # User's email if they want a response
 
 class FeedbackResponse(BaseModel):
     success: bool
     message: str
-    feedback_id: Optional[str] = None
 
-# File to store feedback
-FEEDBACK_FILE = "feedback.json"
-
-def load_feedback():
-    """Load existing feedback from JSON file"""
-    if os.path.exists(FEEDBACK_FILE):
-        try:
-            with open(FEEDBACK_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError):
-            return []
-    return []
-
-def save_feedback(feedback_data: dict):
-    """Save feedback to JSON file"""
-    feedback_list = load_feedback()
-    feedback_data['id'] = f"fb_{len(feedback_list) + 1}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    feedback_data['timestamp'] = datetime.now().isoformat()
-    feedback_list.append(feedback_data)
-    
-    with open(FEEDBACK_FILE, 'w', encoding='utf-8') as f:
-        json.dump(feedback_list, f, indent=2, ensure_ascii=False)
-    
-    return feedback_data['id']
-
-@router.post("/", response_model=FeedbackResponse)
+@router.post("", response_model=FeedbackResponse)
 async def submit_feedback(feedback: FeedbackRequest):
-    """Submit new feedback"""
+    """Submit user feedback via email."""
+    
     try:
-        # Validate rating
-        if feedback.rating < 1 or feedback.rating > 5:
-            raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+        # Format the email content
+        rating_stars = "⭐" * feedback.rating + "☆" * (5 - feedback.rating)
         
-        # Validate email format (basic)
-        if '@' not in feedback.email or '.' not in feedback.email:
-            raise HTTPException(status_code=400, detail="Invalid email format")
+        html_content = f"""
+        <h2>New MedFin Feedback</h2>
+        <p><strong>Rating:</strong> {rating_stars} ({feedback.rating}/5)</p>
+        <p><strong>Category:</strong> {feedback.category}</p>
+        <p><strong>Message:</strong></p>
+        <p style="background: #f5f5f5; padding: 15px; border-radius: 5px;">{feedback.message}</p>
+        """
         
-        # Validate category
-        valid_categories = ["general", "bug", "feature", "improvement"]
-        if feedback.category not in valid_categories:
-            raise HTTPException(status_code=400, detail="Invalid category")
+        if feedback.email:
+            html_content += f"<p><strong>User Email:</strong> {feedback.email}</p>"
         
-        # Save feedback
-        feedback_id = save_feedback(feedback.dict())
+        # Send email using Resend
+        params = {
+            "from": "MedFin Feedback <feedback@resend.dev>",
+            "to": ["ruiadevansh@gmail.com"],
+            "subject": f"MedFin Feedback: {feedback.category} ({feedback.rating}/5 stars)",
+            "html": html_content,
+        }
+        
+        email = resend.Emails.send(params)
         
         return FeedbackResponse(
             success=True,
-            message="Thank you for your feedback! We appreciate your input.",
-            feedback_id=feedback_id
+            message="Thank you for your feedback!"
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save feedback: {str(e)}")
+        print(f"Failed to send feedback email: {e}")
+        # Still return success to user even if email fails
+        # Log the error for debugging
+        raise HTTPException(status_code=500, detail="Failed to submit feedback")
 
-@router.get("/", response_model=List[dict])
-async def get_feedback():
-    """Get all feedback (for admin purposes)"""
-    try:
-        feedback_list = load_feedback()
-        return feedback_list
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load feedback: {str(e)}")
-
-@router.get("/stats")
-async def get_feedback_stats():
-    """Get feedback statistics"""
-    try:
-        feedback_list = load_feedback()
-        
-        total_feedback = len(feedback_list)
-        average_rating = sum(f['rating'] for f in feedback_list) / total_feedback if total_feedback > 0 else 0
-        
-        category_counts = {}
-        for feedback in feedback_list:
-            category_counts[feedback['category']] = category_counts.get(feedback['category'], 0) + 1
-        
-        return {
-            "total_feedback": total_feedback,
-            "average_rating": round(average_rating, 2),
-            "category_counts": category_counts,
-            "recent_feedback": feedback_list[-5:]  # Last 5 feedbacks
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load stats: {str(e)}")
+@router.get("/health")
+async def feedback_health():
+    """Check if feedback service is configured."""
+    return {
+        "status": "ok",
+        "email_configured": bool(os.getenv("RESEND_API_KEY"))
+    }
