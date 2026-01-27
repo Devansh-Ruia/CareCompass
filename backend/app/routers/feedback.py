@@ -12,7 +12,8 @@ resend.api_key = os.getenv("RESEND_API_KEY")
 class FeedbackRequest(BaseModel):
     rating: int  # 1-5 stars
     category: Optional[str] = "general"  # general, bug, feature, other
-    message: str
+    comments: str  # Changed from 'message' to match frontend
+    name: Optional[str] = None  # User's name
     email: Optional[str] = None  # User's email if they want a response
 
 class FeedbackResponse(BaseModel):
@@ -32,8 +33,11 @@ async def submit_feedback(feedback: FeedbackRequest):
         <p><strong>Rating:</strong> {rating_stars} ({feedback.rating}/5)</p>
         <p><strong>Category:</strong> {feedback.category}</p>
         <p><strong>Message:</strong></p>
-        <p style="background: #f5f5f5; padding: 15px; border-radius: 5px;">{feedback.message}</p>
+        <p style="background: #f5f5f5; padding: 15px; border-radius: 5px;">{feedback.comments}</p>
         """
+        
+        if feedback.name:
+            html_content += f"<p><strong>Name:</strong> {feedback.name}</p>"
         
         if feedback.email:
             html_content += f"<p><strong>User Email:</strong> {feedback.email}</p>"

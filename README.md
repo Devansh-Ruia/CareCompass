@@ -146,6 +146,33 @@ The frontend will be available at `http://localhost:3000`
 - `POST /api/v1/payment-plans/generate` - Generate payment plan options
 - `POST /api/v1/payment-plans/recommend` - Get recommended payment plan
 
+## Feedback API
+
+### POST /api/v1/feedback
+Submit user feedback via email.
+
+**Request Body:**
+```json
+{
+  "rating": 5,
+  "category": "feature",
+  "comments": "Your feedback message",
+  "name": "User Name (optional)",
+  "email": "user@example.com (optional)"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Thank you for your feedback!"
+}
+```
+
+### GET /api/v1/feedback/health
+Check if feedback service is configured.
+
 ## Core Principles
 
 - **Modular, service-oriented architecture** - Clear separation between services and routers
