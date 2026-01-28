@@ -88,3 +88,11 @@ MIT License
 2. Create a feature branch
 3. Make your changes
 4. Submit a pull request
+
+## 📋 Changelog
+
+### v1.0.1 - Bug Fixes
+- Fixed crash when payment plans API returns empty or partial data
+- Fixed AssistancePrograms component handling of varying API response formats
+- Added defensive checks for array mapping throughout components
+- Improved error handling in API client with proper TypeScript types

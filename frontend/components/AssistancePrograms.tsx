@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api, InsuranceInfo, MedicalBill, AssistanceMatch } from '../lib/api';
 
 interface AssistanceProgramsProps {
@@ -40,6 +40,11 @@ export default function AssistancePrograms({
       setLoading(false);
     }
   };
+
+  // Safely get programs array from response
+  const programs = (match as any)?.programs || (match ? [match] : []);
+  const recommendedPrograms = (match as any)?.recommended_programs || [];
+  const totalSavings = (match as any)?.total_potential_savings || match?.estimated_savings || 0;
 
   return (
     <div className="space-y-6">
@@ -82,56 +87,35 @@ export default function AssistancePrograms({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="card">
               <div className="text-sm text-gray-500 mb-1">Programs Found</div>
-              <div className="text-2xl font-bold text-primary-600">1</div>
+              <div className="text-2xl font-bold text-primary-600">{programs.length}</div>
             </div>
 
             <div className="card">
               <div className="text-sm text-gray-500 mb-1">Potential Savings</div>
               <div className="text-2xl font-bold text-green-600">
-                ${match.estimated_savings ? match.estimated_savings.toLocaleString() : '0'}
+                ${totalSavings.toLocaleString()}
               </div>
             </div>
 
             <div className="card">
               <div className="text-sm text-gray-500 mb-1">Top Priority</div>
               <div className="text-lg font-semibold text-gray-900">
-                {match.program_name || 'None'}
+                {recommendedPrograms[0] || programs[0]?.program_name || 'Review All Options'}
               </div>
             </div>
           </div>
 
-          {true && (
+          {programs.length > 0 && (
             <div className="card">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Recommended Application Order
-              </h3>
-              <div className="space-y-2">
-                {[match].map((program, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center space-x-4 p-3 bg-primary-50 rounded-lg"
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 font-medium text-primary-900">{program.program_name}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {true && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Matched Programs
+                Matched Programs ({programs.length})
               </h3>
               <div className="space-y-4">
-                {[match].map((program, index) => (
+                {programs.map((program: any, index: number) => (
                   <div
                     key={index}
                     className={`p-4 rounded-lg border-2 ${
-                      true
+                      recommendedPrograms.includes(program.program_name)
                         ? 'border-green-300 bg-green-50'
                         : 'border-gray-200 bg-white'
                     }`}
@@ -139,71 +123,94 @@ export default function AssistancePrograms({
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <h4 className="font-semibold text-gray-900">{program.program_name}</h4>
-                          {true && (
+                          <h4 className="font-semibold text-gray-900">
+                            {program.program_name || `Program ${index + 1}`}
+                          </h4>
+                          {recommendedPrograms.includes(program.program_name) && (
                             <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-medium rounded">
                               Recommended
                             </span>
                           )}
                         </div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          {program.provider}
-                        </div>
+                        {program.provider && (
+                          <div className="text-sm text-gray-600 mt-1">{program.provider}</div>
+                        )}
                       </div>
-                      {program.estimated_savings && (
+                      {(program.estimated_savings || program.max_benefit) && (
                         <div className="text-right">
                           <div className="text-sm text-gray-500">Max Benefit</div>
                           <div className="font-bold text-green-600">
-                            ${program.estimated_savings.toLocaleString()}
+                            ${(program.estimated_savings || program.max_benefit || 0).toLocaleString()}
                           </div>
                         </div>
                       )}
                     </div>
 
-                    <div className="mt-4">
-                      <div className="text-sm font-medium text-gray-900 mb-2">Eligibility Requirements</div>
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        {program.eligibility_criteria.map((req: string, reqIndex: number) => (
-                          <li key={reqIndex} className="flex items-start space-x-2">
-                            <span className="text-green-500 mt-0.5">✓</span>
-                            <span>{req}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {program.eligibility_criteria && program.eligibility_criteria.length > 0 && (
+                      <div className="mt-4">
+                        <div className="text-sm font-medium text-gray-900 mb-2">Eligibility Requirements</div>
+                        <ul className="text-sm text-gray-600 space-y-1">
+                          {(program.eligibility_criteria || []).map((req: string, reqIndex: number) => (
+                            <li key={reqIndex} className="flex items-start space-x-2">
+                              <span className="text-green-500 mt-0.5">✓</span>
+                              <span>{req}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
-                    <div className="mt-4">
-                      <div className="text-sm font-medium text-gray-900 mb-2">Application Process</div>
-                      <p className="text-sm text-gray-600">{program.application_process}</p>
-                    </div>
+                    {program.application_process && (
+                      <div className="mt-4">
+                        <div className="text-sm font-medium text-gray-900 mb-2">Application Process</div>
+                        <p className="text-sm text-gray-600">{program.application_process}</p>
+                      </div>
+                    )}
 
-                    <div className="mt-4">
-                      <div className="text-sm font-medium text-gray-900 mb-2">Documentation Required</div>
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        {program.application_process.map((doc: string, docIndex: number) => (
-                          <li key={docIndex} className="flex items-start space-x-2">
-                            <span className="text-primary-500 mt-0.5">•</span>
-                            <span>{doc}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {program.required_documents && program.required_documents.length > 0 && (
+                      <div className="mt-4">
+                        <div className="text-sm font-medium text-gray-900 mb-2">Documentation Required</div>
+                        <ul className="text-sm text-gray-600 space-y-1">
+                          {(program.required_documents || []).map((doc: string, docIndex: number) => (
+                            <li key={docIndex} className="flex items-start space-x-2">
+                              <span className="text-primary-500 mt-0.5">•</span>
+                              <span>{doc}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-gray-500">Contact:</span>
-                          <div className="font-medium text-gray-900">{program.provider}</div>
+                          <div className="font-medium text-gray-900">
+                            {program.contact || program.provider || 'See program website'}
+                          </div>
                         </div>
                         <div>
                           <span className="text-gray-500">Approval Time:</span>
-                          <div className="font-medium text-gray-900">{"2-4 weeks"}</div>
+                          <div className="font-medium text-gray-900">
+                            {program.approval_time || '2-4 weeks'}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {(match as any)?.additional_notes && (match as any)?.additional_notes.length > 0 && (
+            <div className="card bg-blue-50">
+              <h3 className="text-lg font-semibold text-blue-900 mb-2">Additional Notes</h3>
+              <ul className="text-sm text-blue-800 space-y-1">
+                {((match as any)?.additional_notes || []).map((note: string, index: number) => (
+                  <li key={index}>• {note}</li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

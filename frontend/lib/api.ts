@@ -27,8 +27,8 @@ class ApiClient {
     retries: number = 0
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log('API_BASE_URL:', this.baseUrl);
-    console.log('API Request URL:', url);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
     
     try {
       const response = await fetch(url, {
@@ -37,19 +37,40 @@ class ApiClient {
           'Content-Type': 'application/json',
           ...options?.headers,
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         
-        // Retry on 5xx errors
+        // Retry on 5xx errors with exponential backoff
         if (response.status >= 500 && retries < this.maxRetries) {
-          await new Promise(r => setTimeout(r, this.retryDelay * (retries + 1)));
+          const delay = Math.min(1000 * Math.pow(2, retries), 10000); // Max 10 seconds
+          await new Promise(r => setTimeout(r, delay));
           return this.request<T>(endpoint, options, retries + 1);
         }
         
+        // Handle different error types
+        if (response.status === 429) {
+          throw new ApiError(
+            'Too many requests. Please try again later.',
+            response.status,
+            errorData
+          );
+        }
+        
+        if (response.status >= 400 && response.status < 500) {
+          throw new ApiError(
+            errorData.message || errorData.detail || 'Request failed',
+            response.status,
+            errorData
+          );
+        }
+        
         throw new ApiError(
-          errorData.detail || `Request failed: ${response.statusText}`,
+          errorData.detail || `Server error: ${response.statusText}`,
           response.status,
           errorData
         );
@@ -57,15 +78,29 @@ class ApiClient {
 
       return response.json();
     } catch (error) {
+      clearTimeout(timeoutId);
+      
       if (error instanceof ApiError) throw error;
       
-      // Retry on network errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError('Request timed out. Please try again.', 0);
+      }
+      
+      if (!navigator.onLine) {
+        throw new ApiError('You appear to be offline. Please check your internet connection.', 0);
+      }
+      
+      // Retry on network errors with exponential backoff
       if (retries < this.maxRetries) {
-        await new Promise(r => setTimeout(r, this.retryDelay * (retries + 1)));
+        const delay = Math.min(1000 * Math.pow(2, retries), 10000); // Max 10 seconds
+        await new Promise(r => setTimeout(r, delay));
         return this.request<T>(endpoint, options, retries + 1);
       }
       
-      throw new ApiError('Network error. Please check your connection.', 0);
+      throw new ApiError(
+        'Network error. Please check your connection and try again.',
+        0
+      );
     }
   }
 
