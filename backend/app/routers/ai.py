@@ -47,42 +47,92 @@ async def analyze_policy(request: PolicyTextRequest):
 @router.post("/upload-policy")
 async def upload_policy(file: UploadFile = File(...)):
     """Upload and analyze a policy document (PDF or image)."""
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Received file upload: {file.filename}, content_type: {file.content_type}")
+    
     if not gemini_service.is_configured():
         raise HTTPException(status_code=503, detail="AI service not configured")
     
-    content = await file.read()
+    # Validate file type
+    filename = file.filename.lower() if file.filename else ""
+    allowed_extensions = ('.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp')
     
-    # Extract text based on file type
-    if file.filename.lower().endswith('.pdf'):
-        # Extract text from PDF
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+    if not filename.endswith(allowed_extensions):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+        )
+    
+    try:
+        content = await file.read()
+        logger.info(f"Read {len(content)} bytes from file")
+        
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        
         policy_text = ""
-        for page in pdf_reader.pages:
-            policy_text += page.extract_text() + "\n"
-    else:
-        # For images, we'll use Gemini's vision capability
-        image_base64 = base64.b64encode(content).decode()
-        # Use vision model to extract text
-        import google.generativeai as genai
-        from PIL import Image
-        image = Image.open(io.BytesIO(content))
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content([
-            "Extract all text from this insurance policy document. Return only the extracted text, nothing else.",
-            image
-        ])
-        policy_text = response.text
-    
-    # Now analyze the extracted text
-    result = await gemini_service.analyze_insurance_policy(policy_text)
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    
-    return {
-        "policy_data": result,
-        "extracted_text_length": len(policy_text),
-        "source_file": file.filename
-    }
+        
+        # Extract text based on file type
+        if filename.endswith('.pdf'):
+            logger.info("Processing PDF file")
+            try:
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+                for page in pdf_reader.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        policy_text += extracted + "\n"
+                logger.info(f"Extracted {len(policy_text)} characters from PDF")
+            except Exception as pdf_error:
+                logger.error(f"PDF extraction failed: {pdf_error}")
+                raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(pdf_error)}")
+        else:
+            # For images, use Gemini's vision capability
+            logger.info("Processing image file")
+            try:
+                from PIL import Image
+                image = Image.open(io.BytesIO(content))
+                logger.info(f"Image size: {image.size}, format: {image.format}")
+                
+                # Use the vision model from gemini_service
+                import google.generativeai as genai
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                response = model.generate_content([
+                    "Extract all text from this insurance policy document. Return only the extracted text, nothing else.",
+                    image
+                ])
+                policy_text = response.text
+                logger.info(f"Extracted {len(policy_text)} characters from image")
+            except Exception as img_error:
+                logger.error(f"Image processing failed: {img_error}")
+                raise HTTPException(status_code=400, detail=f"Failed to process image: {str(img_error)}")
+        
+        if not policy_text or len(policy_text.strip()) < 50:
+            raise HTTPException(
+                status_code=400, 
+                detail="Could not extract sufficient text from the document. Please ensure it's a clear policy document."
+            )
+        
+        # Analyze the extracted text
+        logger.info("Analyzing policy text with AI")
+        result = await gemini_service.analyze_insurance_policy(policy_text)
+        
+        if "error" in result:
+            logger.error(f"AI analysis failed: {result['error']}")
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        logger.info("Policy analysis complete")
+        return {
+            "policy_data": result,
+            "extracted_text_length": len(policy_text),
+            "source_file": file.filename
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error processing policy: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to process policy: {str(e)}")
 
 @router.post("/ask-question")
 async def ask_policy_question(request: QuestionRequest):
