@@ -24,76 +24,188 @@ class GeminiService:
     async def analyze_insurance_policy(self, policy_text: str) -> Dict[str, Any]:
         """Extract and analyze all parameters from an insurance policy."""
         
-        prompt = """You are an expert insurance analyst. Analyze this insurance policy document and extract ALL parameters in a structured JSON format.
+        prompt = """You are an expert insurance analyst. Analyze this insurance policy document and extract parameters in a FLAT JSON structure.
 
-Extract the following categories:
+IMPORTANT: Return a flat JSON object with these EXACT keys. Do NOT use nested objects.
 
-1. **Basic Information**:
-   - policy_number, policy_holder_name, effective_date, expiration_date
-   - insurance_company, plan_name, plan_type (HMO/PPO/EPO/POS/HDHP)
-   - group_number, member_id
+MONETARY VALUES: Return as NUMBERS (e.g., 500, not "$500")
+PERCENTAGES: Return as NUMBERS (e.g., 20, not "20%")
+BOOLEANS: Use true/false, not "Yes"/"No"
+ARRAYS: Use [] for empty arrays, null for missing values
 
-2. **Coverage Limits**:
-   - annual_deductible_individual, annual_deductible_family
-   - out_of_pocket_max_individual, out_of_pocket_max_family
-   - lifetime_maximum
-   - deductible_met_individual, deductible_met_family (if stated)
-
-3. **Premium Information**:
-   - monthly_premium, annual_premium
-   - employer_contribution, employee_contribution
-
-4. **Cost Sharing**:
-   - copay_primary_care, copay_specialist, copay_urgent_care, copay_emergency
-   - coinsurance_in_network, coinsurance_out_of_network
-   - prescription_copay_generic, prescription_copay_brand, prescription_copay_specialty
-
-5. **Coverage Details**:
-   - preventive_care_coverage (percentage or description)
-   - hospitalization_coverage, surgery_coverage
-   - mental_health_coverage, substance_abuse_coverage
-   - maternity_coverage, pediatric_coverage
-   - vision_coverage, dental_coverage
-   - physical_therapy_visits, chiropractic_visits
-
-6. **Network Information**:
-   - network_name, in_network_benefits, out_of_network_benefits
-   - prior_authorization_required (list of services)
-   - referral_required (boolean)
-
-7. **Exclusions & Limitations**:
-   - excluded_services (list)
-   - waiting_periods (dict of service: days)
-   - pre_existing_condition_limitations
-
-8. **Additional Benefits**:
-   - telehealth_coverage, wellness_programs
-   - hsa_eligible, fsa_eligible
-   - additional_riders
-
-Return ONLY valid JSON with these exact categories. Use null for unknown values.
-Also include:
-- "policy_strength_score": 1-100 rating of overall coverage quality
-- "coverage_gaps": list of potential gaps or weaknesses
-- "key_benefits": list of standout benefits
-- "recommendations": list of things the policy holder should be aware of
+REQUIRED KEYS:
+{
+  "policy_number": "string or null",
+  "policy_holder_name": "string or null", 
+  "insurance_company": "string or null",
+  "plan_name": "string or null",
+  "plan_type": "PPO/HMO/EPO/POS/HDHP or null",
+  
+  "annual_deductible_individual": "number or null",
+  "annual_deductible_family": "number or null",
+  "out_of_pocket_max_individual": "number or null", 
+  "out_of_pocket_max_family": "number or null",
+  "lifetime_maximum": "number or null",
+  
+  "copay_primary_care": "number or null",
+  "copay_specialist": "number or null",
+  "copay_urgent_care": "number or null",
+  "copay_emergency": "number or null",
+  
+  "coinsurance_in_network": "number or null",
+  "coinsurance_out_of_network": "number or null",
+  
+  "prescription_copay_generic": "number or null",
+  "prescription_copay_brand": "number or null", 
+  "prescription_copay_specialty": "number or null",
+  
+  "preventive_care_covered": "boolean or null",
+  "mental_health_covered": "boolean or null",
+  "substance_abuse_covered": "boolean or null",
+  "maternity_coverage": "boolean or null",
+  "pediatric_coverage": "boolean or null",
+  "adult_dental_covered": "boolean or null",
+  "adult_vision_covered": "boolean or null",
+  "physical_therapy_visits": "number or null",
+  "chiropractic_visits": "number or null",
+  
+  "referral_required": "boolean or null",
+  "hsa_eligible": "boolean or null",
+  "fsa_eligible": "boolean or null",
+  "telehealth_covered": "boolean or null",
+  
+  "excluded_services": ["array of strings or empty array"],
+  "coverage_gaps": ["array of strings or empty array"], 
+  "key_benefits": ["array of strings or empty array"],
+  "recommendations": ["array of strings or empty array"],
+  
+  "policy_strength_score": "number 1-100 or null"
+}
 
 POLICY DOCUMENT:
 """
         
         try:
-            response = self.model.generate_content(prompt + policy_text)
-            # Extract JSON from response
-            text = response.text
-            # Find JSON in response
-            start = text.find('{')
-            end = text.rfind('}') + 1
-            if start != -1 and end > start:
-                json_str = text[start:end]
-                return json.loads(json_str)
-            return {"error": "Could not parse policy", "raw_response": text}
+            response = self.model.generate_content(
+                prompt + policy_text,
+                generation_config=genai.types.GenerationConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            
+            # Parse JSON response
+            result = json.loads(response.text)
+            
+            # Normalize the data to ensure correct types
+            return self._normalize_policy_data(result)
+            
         except Exception as e:
             return {"error": str(e)}
+
+    def _normalize_policy_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize policy data to ensure correct data types."""
+        normalized = {}
+        
+        # Monetary fields that should be numbers
+        monetary_fields = [
+            'annual_deductible_individual', 'annual_deductible_family',
+            'out_of_pocket_max_individual', 'out_of_pocket_max_family',
+            'lifetime_maximum', 'copay_primary_care', 'copay_specialist',
+            'copay_urgent_care', 'copay_emergency', 'prescription_copay_generic',
+            'prescription_copay_brand', 'prescription_copay_specialty',
+            'physical_therapy_visits', 'chiropractic_visits'
+        ]
+        
+        # Percentage fields that should be numbers
+        percentage_fields = [
+            'coinsurance_in_network', 'coinsurance_out_of_network'
+        ]
+        
+        # Boolean fields
+        boolean_fields = [
+            'preventive_care_covered', 'mental_health_covered',
+            'substance_abuse_covered', 'maternity_coverage', 'pediatric_coverage',
+            'adult_dental_covered', 'adult_vision_covered', 'referral_required',
+            'hsa_eligible', 'fsa_eligible', 'telehealth_covered'
+        ]
+        
+        # Array fields
+        array_fields = [
+            'excluded_services', 'coverage_gaps', 'key_benefits', 'recommendations'
+        ]
+        
+        for key, value in data.items():
+            if key in monetary_fields:
+                # Convert monetary strings like "$500" to numbers like 500
+                if isinstance(value, str):
+                    # Remove currency symbols and convert to number
+                    clean_value = value.replace('$', '').replace(',', '').strip()
+                    try:
+                        normalized[key] = float(clean_value)
+                    except ValueError:
+                        normalized[key] = None
+                elif isinstance(value, (int, float)):
+                    normalized[key] = value
+                else:
+                    normalized[key] = None
+                    
+            elif key in percentage_fields:
+                # Convert percentage strings like "20%" to numbers like 20
+                if isinstance(value, str):
+                    clean_value = value.replace('%', '').strip()
+                    try:
+                        normalized[key] = float(clean_value)
+                    except ValueError:
+                        normalized[key] = None
+                elif isinstance(value, (int, float)):
+                    normalized[key] = value
+                else:
+                    normalized[key] = None
+                    
+            elif key in boolean_fields:
+                # Convert various boolean representations to actual booleans
+                if isinstance(value, bool):
+                    normalized[key] = value
+                elif isinstance(value, str):
+                    lower_value = value.lower().strip()
+                    if lower_value in ['true', 'yes', 'y', 'covered', 'included']:
+                        normalized[key] = True
+                    elif lower_value in ['false', 'no', 'n', 'not covered', 'excluded']:
+                        normalized[key] = False
+                    else:
+                        normalized[key] = None
+                else:
+                    normalized[key] = None
+                    
+            elif key in array_fields:
+                # Ensure array fields are always arrays
+                if isinstance(value, list):
+                    normalized[key] = value
+                elif value is None:
+                    normalized[key] = []
+                else:
+                    normalized[key] = [str(value)]
+                    
+            elif key == 'policy_strength_score':
+                # Ensure policy strength score is a number
+                if isinstance(value, (int, float)):
+                    normalized[key] = value
+                elif isinstance(value, str):
+                    try:
+                        normalized[key] = float(value)
+                    except ValueError:
+                        normalized[key] = None
+                else:
+                    normalized[key] = None
+                    
+            else:
+                # String fields - keep as is or convert to string
+                if value is None:
+                    normalized[key] = None
+                else:
+                    normalized[key] = str(value)
+        
+        return normalized
 
     async def validate_bill_against_policy(
         self, 
