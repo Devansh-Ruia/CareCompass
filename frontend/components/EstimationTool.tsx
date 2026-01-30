@@ -13,6 +13,231 @@ interface Message {
   data?: QuestionAnswer;
 }
 
+// Markdown parsing functions
+const formatInlineMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.*?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>');
+};
+
+const parseMarkdown = (text: string): JSX.Element[] => {
+  const lines = text.split('\n');
+  const elements: JSX.Element[] = [];
+  let currentList: JSX.Element[] = [];
+  let listType: 'ol' | 'ul' | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    
+    if (line === '') {
+      // Empty line - close any open list and add spacing
+      if (currentList.length > 0) {
+        elements.push(
+          listType === 'ol' ? 
+            <ol key={`list-${i}`} className="list-decimal list-inside space-y-1 mb-3">{currentList}</ol> :
+            <ul key={`list-${i}`} className="list-disc list-inside space-y-1 mb-3">{currentList}</ul>
+        );
+        currentList = [];
+        listType = null;
+      }
+      elements.push(<div key={`space-${i}`} className="h-2"></div>);
+      continue;
+    }
+
+    // Check for numbered list
+    if (/^\d+\.\s/.test(line)) {
+      if (listType !== 'ol') {
+        if (currentList.length > 0) {
+          elements.push(<ul key={`list-${i}`} className="list-disc list-inside space-y-1 mb-3">{currentList}</ul>);
+        }
+        currentList = [];
+        listType = 'ol';
+      }
+      const content = line.replace(/^\d+\.\s/, '');
+      currentList.push(
+        <li key={i} dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(content) }} />
+      );
+      continue;
+    }
+
+    // Check for bullet list
+    if (/^[*\-]\s/.test(line)) {
+      if (listType !== 'ul') {
+        if (currentList.length > 0) {
+          elements.push(<ol key={`list-${i}`} className="list-decimal list-inside space-y-1 mb-3">{currentList}</ol>);
+        }
+        currentList = [];
+        listType = 'ul';
+      }
+      const content = line.replace(/^[*\-]\s/, '');
+      currentList.push(
+        <li key={i} dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(content) }} />
+      );
+      continue;
+    }
+
+    // Regular paragraph - close any open list
+    if (currentList.length > 0) {
+      elements.push(
+        listType === 'ol' ? 
+          <ol key={`list-${i}`} className="list-decimal list-inside space-y-1 mb-3">{currentList}</ol> :
+          <ul key={`list-${i}`} className="list-disc list-inside space-y-1 mb-3">{currentList}</ul>
+      );
+      currentList = [];
+      listType = null;
+    }
+
+    elements.push(
+      <p key={i} className="mb-3" dangerouslySetInnerHTML={{ __html: formatInlineMarkdown(line) }} />
+    );
+  }
+
+  // Close any remaining list
+  if (currentList.length > 0) {
+    elements.push(
+      listType === 'ol' ? 
+        <ol key="final-list" className="list-decimal list-inside space-y-1 mb-3">{currentList}</ol> :
+        <ul key="final-list" className="list-disc list-inside space-y-1 mb-3">{currentList}</ul>
+    );
+  }
+
+  return elements;
+};
+
+// Confidence Meter Component
+const ConfidenceMeter = ({ confidence }: { confidence: number }) => {
+  const getColor = () => {
+    if (confidence >= 80) return 'bg-green-500';
+    if (confidence >= 60) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getWidthClass = () => {
+    if (confidence >= 90) return 'w-[90%]';
+    if (confidence >= 80) return 'w-[80%]';
+    if (confidence >= 70) return 'w-[70%]';
+    if (confidence >= 60) return 'w-[60%]';
+    if (confidence >= 50) return 'w-[50%]';
+    if (confidence >= 40) return 'w-[40%]';
+    if (confidence >= 30) return 'w-[30%]';
+    if (confidence >= 20) return 'w-[20%]';
+    if (confidence >= 10) return 'w-[10%]';
+    return 'w-[5%]';
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-gray-600">Confidence:</span>
+      <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-[100px]">
+        <div 
+          className={`h-2 rounded-full transition-all ${getColor()} ${getWidthClass()}`}
+        />
+      </div>
+      <span className="text-sm font-medium text-gray-700">{confidence}%</span>
+    </div>
+  );
+};
+
+// AI Response Card Component
+const AIResponseCard = ({ data, onFollowUp }: { data: QuestionAnswer; onFollowUp: (question: string) => void }) => {
+  const [showDetails, setShowDetails] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      {/* Main Answer */}
+      <div className="prose prose-sm max-w-none">
+        {parseMarkdown(data.answer)}
+      </div>
+
+      {/* Estimated Costs */}
+      {data.estimated_costs && data.estimated_costs.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+            <span>💰</span> Estimated Costs
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {data.estimated_costs.map((cost: any, i: number) => (
+              <div key={i} className="bg-white rounded p-3 border border-blue-100">
+                <div className="text-sm font-medium text-gray-900">{cost.item}</div>
+                <div className="text-lg font-bold text-blue-600">{cost.amount}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Warnings */}
+      {data.warnings && data.warnings.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <h4 className="font-semibold text-amber-900 mb-3 flex items-center gap-2">
+            <span>⚠️</span> Important Notes
+          </h4>
+          <ul className="space-y-2">
+            {data.warnings.map((warning: string, i: number) => (
+              <li key={i} className="text-sm text-amber-800 flex items-start gap-2">
+                <span className="text-amber-600 mt-0.5">•</span>
+                <span>{warning}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Policy Details Referenced */}
+      {data.relevant_policy_details && data.relevant_policy_details.length > 0 && (
+        <div className="border border-gray-200 rounded-lg">
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition"
+          >
+            <span className="font-medium text-gray-900">Policy Details Referenced</span>
+            <span className="text-gray-400">
+              {showDetails ? '▼' : '▶'}
+            </span>
+          </button>
+          {showDetails && (
+            <div className="px-4 pb-3 border-t border-gray-200">
+              <ul className="space-y-2 mt-3">
+                {data.relevant_policy_details.map((detail: string, i: number) => (
+                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <span className="text-gray-400 mt-0.5">•</span>
+                    <span>{detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Follow-up Questions */}
+      {data.follow_up_questions && data.follow_up_questions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-gray-700">Follow-up Questions:</p>
+          <div className="flex flex-wrap gap-2">
+            {data.follow_up_questions.map((question, i) => (
+              <button
+                key={i}
+                onClick={() => onFollowUp(question)}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full text-sm transition"
+              >
+                {question}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Confidence Score */}
+      {data.confidence && (
+        <div className="pt-3 border-t border-gray-100">
+          <ConfidenceMeter confidence={data.confidence} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function EstimationTool({ policyData }: EstimationToolProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -65,7 +290,7 @@ export default function EstimationTool({ policyData }: EstimationToolProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
       {/* Chat Messages */}
-      <div className="h-96 overflow-y-auto p-6 space-y-4">
+      <div className="h-[500px] overflow-y-auto p-6 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-5xl mb-4">💬</div>
@@ -90,26 +315,15 @@ export default function EstimationTool({ policyData }: EstimationToolProps) {
               key={i}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-lg rounded-2xl px-4 py-3 ${
+              <div className={`max-w-2xl w-full rounded-2xl px-5 py-4 ${
                 msg.role === 'user'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-900'
+                  : 'bg-gray-50 border border-gray-100'
               }`}>
-                <p>{msg.content}</p>
-                
-                {msg.data?.warnings && msg.data.warnings.length > 0 && (
-                  <div className="mt-3 p-2 bg-yellow-50 rounded-lg">
-                    <p className="text-xs font-semibold text-yellow-800">⚠️ Warnings</p>
-                    {msg.data.warnings.map((w, j) => (
-                      <p key={j} className="text-xs text-yellow-700">{w}</p>
-                    ))}
-                  </div>
-                )}
-                
-                {msg.data?.confidence && (
-                  <p className="text-xs mt-2 opacity-70">
-                    Confidence: {msg.data.confidence}%
-                  </p>
+                {msg.data ? (
+                  <AIResponseCard data={msg.data} onFollowUp={handleSend} />
+                ) : (
+                  <p className="text-gray-700">{msg.content}</p>
                 )}
               </div>
             </div>
@@ -118,11 +332,12 @@ export default function EstimationTool({ policyData }: EstimationToolProps) {
         
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-gray-100 rounded-2xl px-4 py-3">
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-100"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce animation-delay-200"></div>
+                <span className="text-gray-600 ml-2">Analyzing your policy...</span>
               </div>
             </div>
           </div>
@@ -132,7 +347,7 @@ export default function EstimationTool({ policyData }: EstimationToolProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t p-4">
+      <div className="border-t p-4 bg-gray-50">
         <div className="flex gap-2">
           <input
             type="text"
