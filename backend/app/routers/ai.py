@@ -5,6 +5,9 @@ import base64
 import json
 import logging
 import traceback
+import io
+import PyPDF2
+from PIL import Image
 from ..services.gemini_service import gemini_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
