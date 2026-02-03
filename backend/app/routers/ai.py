@@ -24,6 +24,16 @@ class OptimizationRequest(BaseModel):
     policy_data: Dict[str, Any]
     user_needs: Dict[str, Any]
 
+class PreVisitRequest(BaseModel):
+    visit_type: str
+    policy_data: Dict[str, Any]
+    provider_info: Optional[Dict[str, Any]] = None
+
+class AppealRequest(BaseModel):
+    denial_info: Dict[str, Any]
+    policy_data: Dict[str, Any]
+    tone: str = "professional"
+
 @router.get("/health")
 async def ai_health():
     """Check if AI service is configured."""
@@ -216,3 +226,94 @@ async def optimize_policy(request: OptimizationRequest):
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
+
+@router.post("/pre-visit-checklist")
+async def generate_pre_visit_checklist(request: PreVisitRequest):
+    """Generate a pre-visit checklist for a specific medical visit type."""
+    if not gemini_service.is_configured():
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    
+    result = await gemini_service.generate_pre_visit_checklist(
+        request.visit_type,
+        request.policy_data,
+        request.provider_info
+    )
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
+
+@router.post("/generate-appeal")
+async def generate_appeal_letter(request: AppealRequest):
+    """Generate an appeal letter for a denied claim."""
+    if not gemini_service.is_configured():
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    
+    result = await gemini_service.generate_appeal_letter(
+        request.denial_info,
+        request.policy_data,
+        request.tone
+    )
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
+
+@router.post("/upload-denial")
+async def upload_denial_letter(
+    file: UploadFile = File(...),
+    policy_data: str = Form(...),
+    tone: str = Form("professional")
+):
+    """Upload a denial letter and generate appeal letter."""
+    if not gemini_service.is_configured():
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    
+    import json
+    policy = json.loads(policy_data)
+    
+    content = await file.read()
+    image_base64 = base64.b64encode(content).decode()
+    
+    # First extract denial info from the image
+    denial_extraction_prompt = """Extract the following information from this denial letter image:
+    - denial_date (when the denial was sent)
+    - service_description (what was denied)
+    - service_date (date of service)
+    - amount_denied (numeric value)
+    - denial_reason (why they denied it)
+    - denial_code (if provided)
+    - insurer_name (insurance company name)
+    - claim_number (if provided)
+    
+    Return as JSON with these exact keys. Use null for any missing information."""
+    
+    try:
+        # Extract denial info using vision model
+        response = await gemini_service.vision_model.generate_content([
+            denial_extraction_prompt,
+            {"mime_type": "image/jpeg", "data": image_base64}
+        ])
+        
+        text = response.text
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start != -1 and end > start:
+            denial_info = json.loads(text[start:end])
+        else:
+            raise Exception("Could not extract denial information")
+        
+        # Generate appeal letter
+        result = await gemini_service.generate_appeal_letter(
+            denial_info,
+            policy,
+            tone
+        )
+        
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+        
+        # Include extracted denial info in response
+        result["extracted_denial_info"] = denial_info
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process denial letter: {str(e)}")

@@ -279,6 +279,58 @@ class ApiClient {
       }),
     });
   }
+
+  async generatePreVisitChecklist(
+    visitType: string,
+    policyData: PolicyData,
+    providerInfo?: any
+  ): Promise<PreVisitChecklist> {
+    return this.request<PreVisitChecklist>('/api/v1/ai/pre-visit-checklist', {
+      method: 'POST',
+      body: JSON.stringify({
+        visit_type: visitType,
+        policy_data: policyData,
+        provider_info: providerInfo,
+      }),
+    });
+  }
+
+  async generateAppealLetter(
+    denialInfo: DenialInfo,
+    policyData: PolicyData,
+    tone: string = 'professional'
+  ): Promise<AppealLetter> {
+    return this.request<AppealLetter>('/api/v1/ai/generate-appeal', {
+      method: 'POST',
+      body: JSON.stringify({
+        denial_info: denialInfo,
+        policy_data: policyData,
+        tone: tone,
+      }),
+    });
+  }
+
+  async uploadDenialLetter(
+    file: File,
+    policyData: PolicyData,
+    tone: string = 'professional'
+  ): Promise<AppealLetter & { extracted_denial_info: DenialInfo }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('policy_data', JSON.stringify(policyData));
+    formData.append('tone', tone);
+    
+    const response = await fetch(`${this.baseUrl}/api/v1/ai/upload-denial`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to process denial letter');
+    }
+    
+    return response.json();
+  }
 }
 
 export const api = new ApiClient();
@@ -435,4 +487,59 @@ export interface OptimizationResult {
     priority: number;
   }>;
   summary: string;
+}
+
+export interface PreVisitChecklist {
+  visit_type: string;
+  estimated_costs: {
+    typical_range_low: number;
+    typical_range_high: number;
+    your_cost_low: number;
+    your_cost_high: number;
+    deductible_applies: boolean;
+    deductible_remaining: number | null;
+    coinsurance_rate: number;
+    copay_if_applicable: number | null;
+  };
+  prior_authorization: {
+    likely_required: boolean;
+    reason: string;
+    how_to_obtain: string;
+    typical_timeline: string;
+    consequence_if_skipped: string;
+  };
+  questions_to_ask_provider: string[];
+  questions_to_ask_insurance: string[];
+  documents_to_request_after: string[];
+  network_warnings: string[];
+  money_saving_tips: string[];
+  coverage_summary: string;
+}
+
+export interface AppealLetter {
+  analysis: {
+    denial_weakness: string;
+    supporting_policy_language: string[];
+    applicable_regulations: string[];
+    success_likelihood: 'High' | 'Medium' | 'Low';
+    success_reasoning: string;
+  };
+  letter: {
+    subject_line: string;
+    letter_body: string;
+    attachments_needed: string[];
+    deadline: string;
+  };
+  next_steps: string[];
+}
+
+export interface DenialInfo {
+  denial_date?: string;
+  service_description?: string;
+  service_date?: string;
+  amount_denied?: number;
+  denial_reason?: string;
+  denial_code?: string;
+  insurer_name?: string;
+  claim_number?: string;
 }

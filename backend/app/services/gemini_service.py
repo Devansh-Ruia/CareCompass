@@ -435,5 +435,145 @@ Return as JSON:
         except Exception as e:
             return {"error": str(e)}
 
+    async def generate_pre_visit_checklist(
+        self,
+        visit_type: str,
+        policy_data: Dict[str, Any],
+        provider_info: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Generate a comprehensive pre-visit checklist for a specific medical visit type."""
+        
+        prompt = f"""You are a healthcare financial advisor. Based on this insurance policy, generate a comprehensive pre-visit checklist for: {visit_type}
+
+POLICY DETAILS:
+{json.dumps(policy_data, indent=2)}
+
+PROVIDER INFO (if any):
+{json.dumps(provider_info, indent=2) if provider_info else "Not specified"}
+
+Generate a JSON response with this exact structure:
+{{
+  "visit_type": "{visit_type}",
+  "estimated_costs": {{
+    "typical_range_low": number,
+    "typical_range_high": number,
+    "your_cost_low": number,
+    "your_cost_high": number,
+    "deductible_applies": boolean,
+    "deductible_remaining": number or null,
+    "coinsurance_rate": number,
+    "copay_if_applicable": number or null
+  }},
+  "prior_authorization": {{
+    "likely_required": boolean,
+    "reason": "string explaining why or why not",
+    "how_to_obtain": "string with specific steps",
+    "typical_timeline": "string (e.g., 3-5 business days)",
+    "consequence_if_skipped": "string explaining risks"
+  }},
+  "questions_to_ask_provider": ["list of 4-6 specific questions to ask the doctor/office"],
+  "questions_to_ask_insurance": ["list of 2-3 questions to call insurance about"],
+  "documents_to_request_after": ["list of documents to get after the visit"],
+  "network_warnings": ["potential out-of-network issues to watch for"],
+  "money_saving_tips": ["3-5 specific tips based on this policy"],
+  "coverage_summary": "2-3 sentence plain English summary of what this visit will cost"
+}}
+
+IMPORTANT GUIDELINES:
+- Use realistic cost ranges based on national averages for this visit type
+- Calculate actual patient responsibility based on their specific policy terms
+- Consider deductible status, copays, and coinsurance
+- Be specific about prior authorization requirements
+- Include practical, actionable advice
+- Use plain English - no insurance jargon without explanation
+- All monetary values should be numbers (not strings with $)
+"""
+        
+        try:
+            response = self.model.generate_content(prompt)
+            text = response.text
+            
+            start = text.find('{')
+            end = text.rfind('}') + 1
+            if start != -1 and end > start:
+                return json.loads(text[start:end])
+            return {"error": "Could not generate pre-visit checklist", "raw_response": text}
+        except Exception as e:
+            return {"error": str(e)}
+
+    async def generate_appeal_letter(
+        self,
+        denial_info: Dict[str, Any],
+        policy_data: Dict[str, Any],
+        tone: str = "professional"  # professional, firm, escalation
+    ) -> Dict[str, Any]:
+        """Generate a compelling appeal letter for a denied claim."""
+        
+        prompt = f"""You are an expert healthcare advocate and insurance appeals specialist. 
+Generate a compelling appeal letter for this denied claim.
+
+DENIAL INFORMATION:
+{json.dumps(denial_info, indent=2)}
+
+PATIENT'S POLICY DETAILS:
+{json.dumps(policy_data, indent=2)}
+
+TONE: {tone}
+
+Your task:
+1. Analyze why the denial may be incorrect based on the policy language
+2. Identify specific policy sections that support coverage
+3. Reference applicable federal/state regulations
+4. Create a professional appeal letter that:
+   - States the facts clearly
+   - Cites specific policy language
+   - Explains medical necessity
+   - References relevant laws (ACA, ERISA, state regulations)
+   - Requests specific action and timeline
+   - Mentions external review rights
+
+Return JSON with this exact structure:
+{{
+  "analysis": {{
+    "denial_weakness": "string explaining why their denial is likely wrong",
+    "supporting_policy_language": ["list of specific policy quotes that support coverage"],
+    "applicable_regulations": ["list of laws/regulations that apply"],
+    "success_likelihood": "High/Medium/Low",
+    "success_reasoning": "string explaining the likelihood assessment"
+  }},
+  "letter": {{
+    "subject_line": "string with proper appeal subject line",
+    "letter_body": "string with full formatted letter text including salutation and closing",
+    "attachments_needed": ["list of documents to include with appeal"],
+    "deadline": "string explaining when to submit by (usually 180 days from denial)"
+  }},
+  "next_steps": [
+    "string explaining step 1 if this appeal is denied",
+    "string explaining how to request external review",
+    "string explaining state insurance commissioner contact if needed"
+  ]
+}}
+
+IMPORTANT GUIDELINES:
+- Be thorough and professional
+- Cite specific policy language when possible
+- Reference real regulations (ACA, No Surprises Act, state laws)
+- Include practical next steps
+- Format letter properly with appropriate tone
+- Make it actionable and specific to this denial
+"""
+        
+        try:
+            response = self.model.generate_content(prompt)
+            text = response.text
+            
+            start = text.find('{')
+            end = text.rfind('}') + 1
+            if start != -1 and end > start:
+                return json.loads(text[start:end])
+            return {"error": "Could not generate appeal letter", "raw_response": text}
+        except Exception as e:
+            return {"error": str(e)}
+
 # Singleton instance
 gemini_service = GeminiService()
