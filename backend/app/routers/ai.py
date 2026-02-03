@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import base64
-import PyPDF2
-import io
+import json
+import logging
+import traceback
 from ..services.gemini_service import gemini_service
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -198,20 +199,63 @@ async def upload_bill(
     policy_data: str = Form(...)
 ):
     """Upload a bill image and validate against policy."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"=== UPLOAD BILL START ===")
+    logger.info(f"Filename: {file.filename}, Content-Type: {file.content_type}")
+    
     if not gemini_service.is_configured():
+        logger.error("AI service not configured")
         raise HTTPException(status_code=503, detail="AI service not configured")
     
-    import json
-    policy = json.loads(policy_data)
-    
-    content = await file.read()
-    image_base64 = base64.b64encode(content).decode()
-    
-    result = await gemini_service.validate_bill_against_policy(image_base64, policy)
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    
-    return result
+    try:
+        # Step 1: Parse policy data
+        logger.info("Step 1: Parsing policy_data JSON")
+        try:
+            policy = json.loads(policy_data)
+            logger.info(f"Policy parsed successfully, keys: {list(policy.keys())[:5]}...")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse policy_data: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid policy data JSON: {str(e)}")
+        
+        # Step 2: Read file content
+        logger.info("Step 2: Reading file content")
+        content = await file.read()
+        if not content:
+            logger.error("Empty file uploaded")
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        logger.info(f"Read {len(content)} bytes")
+        
+        # Step 3: Convert to base64
+        logger.info("Step 3: Converting to base64")
+        image_base64 = base64.b64encode(content).decode('utf-8')
+        logger.info(f"Base64 length: {len(image_base64)}")
+        
+        # Step 4: Call Gemini service
+        logger.info("Step 4: Calling gemini_service.validate_bill_against_policy")
+        result = await gemini_service.validate_bill_against_policy(image_base64, policy)
+        logger.info(f"Step 4 complete, result keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
+        
+        # Step 5: Check for errors in result
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"Gemini service returned error: {result['error']}")
+            # Return the error as a proper response instead of 500
+            # This helps with debugging
+            raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+        
+        logger.info("=== UPLOAD BILL SUCCESS ===")
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"=== UPLOAD BILL FAILED ===")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Exception message: {str(e)}")
+        import traceback
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to validate bill: {str(e)}")
 
 @router.post("/optimize-policy")
 async def optimize_policy(request: OptimizationRequest):

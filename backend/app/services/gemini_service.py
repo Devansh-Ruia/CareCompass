@@ -2,6 +2,8 @@ import google.generativeai as genai
 import os
 import json
 import base64
+import logging
+import traceback
 from typing import Optional, Dict, Any, List
 from PIL import Image
 import io
@@ -213,79 +215,189 @@ POLICY DOCUMENT:
         policy_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Analyze a bill image and validate against the insurance policy."""
+        import logging
+        logger = logging.getLogger(__name__)
         
-        prompt = f"""You are an expert medical billing analyst. Analyze this hospital/medical bill image and validate it against the patient's insurance policy.
+        logger.info("=== VALIDATE BILL START ===")
+        
+        # Simplified prompt that's more likely to return valid JSON
+        prompt = f"""Analyze this medical bill image and validate it against the insurance policy.
 
-INSURANCE POLICY DETAILS:
+POLICY DETAILS:
 {json.dumps(policy_data, indent=2)}
 
-TASKS:
-1. **Extract Bill Details**:
-   - provider_name, service_date, bill_date
-   - List all line items with: service_code (CPT/HCPCS), description, quantity, unit_price, total_price
-   - total_charges, insurance_adjustments, insurance_paid, patient_responsibility
+Extract bill information and validate charges. Return ONLY valid JSON (no markdown, no explanation):
 
-2. **Validate Against Policy**:
-   - Check if each service is covered under the policy
-   - Verify copays match policy terms
-   - Check if deductible was properly applied
-   - Verify coinsurance calculations
-   - Check if out-of-pocket max was considered
-
-3. **Identify Issues**:
-   - billing_errors: list of potential errors (duplicate charges, wrong codes, etc.)
-   - coverage_issues: services that should be covered but weren't
-   - overcharges: amounts that seem higher than typical
-   - missing_adjustments: insurance adjustments that should have been applied
-
-4. **Calculate Correct Amounts**:
-   - expected_insurance_payment
-   - expected_patient_responsibility
-   - potential_savings (if errors found)
-
-5. **Recommendations**:
-   - List specific actions to take
-   - Questions to ask the provider
-   - Appeals to file if applicable
-
-Return as JSON with these exact fields:
 {{
-  "bill_extracted": {{...}},
+  "bill_extracted": {{
+    "provider_name": "string or null",
+    "service_date": "string or null", 
+    "total_charges": 0,
+    "patient_responsibility": 0,
+    "line_items": []
+  }},
   "validation_results": {{
     "services_covered": [],
     "services_not_covered": [],
-    "deductible_applied_correctly": boolean,
-    "copays_correct": boolean,
-    "coinsurance_correct": boolean
+    "deductible_applied_correctly": true,
+    "copays_correct": true,
+    "coinsurance_correct": true
   }},
   "issues_found": [],
   "financial_summary": {{
-    "billed_amount": number,
-    "expected_insurance_payment": number,
-    "expected_patient_responsibility": number,
-    "actual_patient_responsibility": number,
-    "potential_savings": number
+    "billed_amount": 0,
+    "expected_insurance_payment": 0,
+    "expected_patient_responsibility": 0,
+    "actual_patient_responsibility": 0,
+    "potential_savings": 0
   }},
   "recommendations": [],
-  "confidence_score": 1-100
+  "confidence_score": 50
 }}
 
-Analyze the bill image now:"""
+If you cannot read the bill, return the JSON structure with null/empty values and confidence_score of 10."""
 
         try:
-            # Decode base64 image
-            image_data = base64.b64decode(bill_image_base64)
-            image = Image.open(io.BytesIO(image_data))
+            # Step 1: Decode base64
+            logger.info("Step 1: Decoding base64 image")
+            try:
+                image_data = base64.b64decode(bill_image_base64)
+                logger.info(f"Decoded {len(image_data)} bytes")
+            except Exception as e:
+                logger.error(f"Base64 decode failed: {e}")
+                return {"error": f"Invalid image data: {str(e)}"}
             
-            response = self.vision_model.generate_content([prompt, image])
-            text = response.text
+            # Step 2: Open image with PIL
+            logger.info("Step 2: Opening image with PIL")
+            try:
+                image = Image.open(io.BytesIO(image_data))
+                logger.info(f"Image: size={image.size}, format={image.format}, mode={image.mode}")
+                
+                # Convert RGBA/P to RGB (Gemini may not support all modes)
+                if image.mode in ('RGBA', 'P', 'LA', 'L'):
+                    logger.info(f"Converting {image.mode} to RGB")
+                    if image.mode == 'P':
+                        image = image.convert('RGBA')
+                    if image.mode in ('RGBA', 'LA'):
+                        # Create white background for transparency
+                        background = Image.new('RGB', image.size, (255, 255, 255))
+                        if image.mode == 'RGBA':
+                            background.paste(image, mask=image.split()[3])
+                        else:
+                            background.paste(image, mask=image.split()[1])
+                        image = background
+                    elif image.mode == 'L':
+                        image = image.convert('RGB')
+                    logger.info(f"Converted to mode: {image.mode}")
+                    
+            except Exception as e:
+                logger.error(f"PIL image open failed: {e}")
+                return {"error": f"Cannot process image: {str(e)}"}
             
-            start = text.find('{')
-            end = text.rfind('}') + 1
-            if start != -1 and end > start:
-                return json.loads(text[start:end])
-            return {"error": "Could not parse bill analysis", "raw_response": text}
+            # Step 3: Call Gemini Vision API
+            logger.info("Step 3: Calling Gemini Vision API")
+            try:
+                response = self.vision_model.generate_content(
+                    [prompt, image],
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=0.1,  # Lower temperature for more consistent JSON
+                    )
+                )
+                
+                if not response or not response.text:
+                    logger.error("Gemini returned empty response")
+                    return {"error": "AI returned empty response"}
+                    
+                text = response.text
+                logger.info(f"Gemini response length: {len(text)}")
+                logger.info(f"Gemini response preview: {text[:500]}...")
+                
+            except Exception as e:
+                logger.error(f"Gemini API call failed: {type(e).__name__}: {e}")
+                return {"error": f"AI analysis failed: {str(e)}"}
+            
+            # Step 4: Parse JSON from response
+            logger.info("Step 4: Parsing JSON response")
+            try:
+                # Remove markdown code blocks if present
+                clean_text = text.strip()
+                if clean_text.startswith("```json"):
+                    clean_text = clean_text[7:]
+                if clean_text.startswith("```"):
+                    clean_text = clean_text[3:]
+                if clean_text.endswith("```"):
+                    clean_text = clean_text[:-3]
+                clean_text = clean_text.strip()
+                
+                # Find JSON object
+                start = clean_text.find('{')
+                end = clean_text.rfind('}') + 1
+                
+                if start == -1 or end <= start:
+                    logger.error(f"No JSON object found in response")
+                    logger.error(f"Full response: {text}")
+                    return {
+                        "error": "AI response was not valid JSON",
+                        "raw_response": text[:1000],
+                        # Return a default structure so the frontend doesn't break
+                        "bill_extracted": {"provider_name": None, "total_charges": 0},
+                        "validation_results": {
+                            "services_covered": [],
+                            "services_not_covered": [],
+                            "deductible_applied_correctly": None,
+                            "copays_correct": None,
+                            "coinsurance_correct": None
+                        },
+                        "issues_found": ["Could not analyze bill - please try with a clearer image"],
+                        "financial_summary": {
+                            "billed_amount": 0,
+                            "expected_insurance_payment": 0,
+                            "expected_patient_responsibility": 0,
+                            "actual_patient_responsibility": 0,
+                            "potential_savings": 0
+                        },
+                        "recommendations": ["Try uploading a clearer image of the bill"],
+                        "confidence_score": 0
+                    }
+                
+                json_str = clean_text[start:end]
+                result = json.loads(json_str)
+                logger.info(f"JSON parsed successfully, keys: {list(result.keys())}")
+                
+                logger.info("=== VALIDATE BILL SUCCESS ===")
+                return result
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parse failed: {e}")
+                logger.error(f"Attempted to parse: {clean_text[:500] if 'clean_text' in dir() else text[:500]}")
+                return {
+                    "error": f"Could not parse AI response as JSON: {str(e)}",
+                    "raw_response": text[:1000],
+                    "bill_extracted": {"provider_name": None, "total_charges": 0},
+                    "validation_results": {
+                        "services_covered": [],
+                        "services_not_covered": [],
+                        "deductible_applied_correctly": None,
+                        "copays_correct": None,
+                        "coinsurance_correct": None
+                    },
+                    "issues_found": ["AI response was malformed - please try again"],
+                    "financial_summary": {
+                        "billed_amount": 0,
+                        "expected_insurance_payment": 0,
+                        "expected_patient_responsibility": 0,
+                        "actual_patient_responsibility": 0,
+                        "potential_savings": 0
+                    },
+                    "recommendations": ["Try uploading again or use a different image"],
+                    "confidence_score": 0
+                }
+                
         except Exception as e:
+            logger.error(f"=== VALIDATE BILL FAILED ===")
+            logger.error(f"Unexpected error: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
             return {"error": str(e)}
 
     async def answer_policy_question(
