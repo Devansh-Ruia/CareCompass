@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, NavigationPlan as NavigationPlanType, InsuranceInfo, MedicalBill } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface NavigationPlanProps {
   insuranceInfo: InsuranceInfo;
@@ -152,7 +153,7 @@ export default function NavigationPlan({
                   </div>
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900">{action.action}</div>
-                    <div className="text-sm text-gray-600 mt-1">{action.description}</div>
+                    <MarkdownRenderer className="text-sm text-gray-600 mt-1">{action.description}</MarkdownRenderer>
                     <div className="flex items-center space-x-4 mt-2 text-sm">
                       {action.estimated_savings && (
                         <span className="text-green-600 font-medium">
@@ -178,8 +179,8 @@ export default function NavigationPlan({
                 {plan.coverage_gaps.map((gap, index) => (
                   <div key={index} className="p-4 border border-orange-200 bg-orange-50 rounded-lg">
                     <div className="font-semibold text-orange-800">{gap.gap_type.replace(/_/g, ' ')}</div>
-                    <div className="text-sm text-orange-700 mt-1">{gap.description}</div>
-                    <div className="text-sm text-gray-700 mt-2">{gap.recommendation}</div>
+                    <MarkdownRenderer className="text-sm text-orange-700 mt-1">{gap.description}</MarkdownRenderer>
+                    <MarkdownRenderer className="text-sm text-gray-700 mt-2">{gap.recommendation}</MarkdownRenderer>
                   </div>
                 ))}
               </div>

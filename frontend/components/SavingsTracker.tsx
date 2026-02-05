@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { api, PolicyData } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 export interface SavingsEvent {
   id: string;
@@ -143,7 +145,7 @@ export default function SavingsTracker({ stats, onAddSavings, compact = false }:
                       <span>{categoryIcons[event.category]}</span>
                       <span className="text-sm font-medium">{categoryLabels[event.category]}</span>
                     </div>
-                    <p className="text-sm opacity-90">{event.description}</p>
+                    <MarkdownRenderer className="text-sm opacity-90">{event.description}</MarkdownRenderer>
                     <p className="text-xs opacity-75 mt-1">{new Date(event.date).toLocaleDateString()}</p>
                   </div>
                   <div className="text-lg font-semibold">

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, InsuranceInfo, CostEstimate } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface CostEstimationProps {
   insuranceInfo: InsuranceInfo;
@@ -168,7 +169,7 @@ export default function CostEstimation({ insuranceInfo }: CostEstimationProps) {
                     {estimate.alternatives.map((alt, index) => (
                       <div key={index} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="font-medium text-blue-900">{alt.type}</div>
-                        <div className="text-sm text-blue-700 mt-1">{alt.description}</div>
+                        <MarkdownRenderer className="text-sm text-blue-700 mt-1">{alt.description}</MarkdownRenderer>
                         <div className="text-sm text-green-600 font-medium mt-1">
                           Potential Savings: {alt.savings}
                         </div>

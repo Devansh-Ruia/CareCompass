@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api, MedicalBill } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface BillAnalysisProps {
   bills: MedicalBill[];
@@ -206,7 +207,7 @@ export default function BillAnalysis({ bills, onBillsChange }: BillAnalysisProps
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900">{bill.provider_name}</div>
-                    <div className="text-sm text-gray-600 mt-1">{bill.description}</div>
+                    <MarkdownRenderer className="text-sm text-gray-600 mt-1">{bill.description}</MarkdownRenderer>
                     {bill.service_codes && bill.service_codes.length > 0 && (
                       <div className="text-sm text-gray-500 mt-1">
                         Codes: {bill.service_codes.join(', ')}
@@ -247,7 +248,7 @@ export default function BillAnalysis({ bills, onBillsChange }: BillAnalysisProps
                   <div className="flex-1">
                     <div className="font-semibold text-gray-900">{issue.issue_type.replace(/_/g, ' ')}</div>
                     <div className="text-sm text-gray-700 mt-1">{issue.description}</div>
-                    <div className="text-sm text-gray-600 mt-2">{issue.recommendation}</div>
+                    <MarkdownRenderer className="text-sm text-gray-700 mt-2">{issue.recommendation}</MarkdownRenderer>
                   </div>
                   {issue.potential_savings > 0 && (
                     <div className="text-right">

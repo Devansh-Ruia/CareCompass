@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api, PolicyData, OptimizationResult } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface OptimizationToolProps {
   policyData: PolicyData;
@@ -219,7 +220,7 @@ export default function OptimizationTool({ policyData }: OptimizationToolProps) 
                             </span>
                             <span className="text-xs text-gray-500 capitalize">{opt.category}</span>
                           </div>
-                          <p className="font-medium text-gray-900">{opt.recommendation}</p>
+                          <MarkdownRenderer className="font-medium text-gray-900">{opt.recommendation}</MarkdownRenderer>
                         </div>
                         {opt.potential_savings > 0 && (
                           <div className="text-right ml-4">

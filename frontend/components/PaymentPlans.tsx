@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api, MedicalBill, PaymentPlanOption } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface PaymentPlansProps {
   bills: MedicalBill[];

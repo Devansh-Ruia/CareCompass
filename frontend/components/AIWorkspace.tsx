@@ -11,6 +11,7 @@ import AppealTool from './AppealTool';
 import FamilyDashboard from './FamilyDashboard';
 import SavingsTracker from './SavingsTracker';
 import PrivacyPanel from './PrivacyPanel';
+import MarkdownRenderer from './MarkdownRenderer';
 import { useSavings } from '../contexts/SavingsContext';
 import { useFamily } from '../contexts/FamilyContext';
 
@@ -122,7 +123,7 @@ export default function AIWorkspace({ policyData, onReset }: AIWorkspaceProps) {
                             action.priority === 'medium' ? 'bg-amber-500' : 'bg-green-500'
                           }`} />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-900">{action.description}</p>
+                            <MarkdownRenderer className="text-sm font-medium text-gray-900">{action.description}</MarkdownRenderer>
                             <p className="text-xs text-gray-500">{action.memberName} • {action.actionType}</p>
                           </div>
                         </div>

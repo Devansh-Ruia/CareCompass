@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, InsuranceInfo, MedicalBill } from '../lib/api';
+import MarkdownRenderer from './MarkdownRenderer';
 
 interface InsuranceAnalysisProps {
   insuranceInfo: InsuranceInfo;
@@ -255,8 +256,8 @@ export default function InsuranceAnalysis({ insuranceInfo, bills, onInsuranceCha
                         <div className="font-semibold text-orange-800">
                           {gap.gap_type.replace(/_/g, ' ')}
                         </div>
-                        <div className="text-sm text-orange-700 mt-1">{gap.description}</div>
-                        <div className="text-sm text-gray-700 mt-2">{gap.recommendation}</div>
+                        <MarkdownRenderer className="text-sm text-orange-700 mt-1">{gap.description}</MarkdownRenderer>
+                        <MarkdownRenderer className="text-sm text-gray-700 mt-2">{gap.recommendation}</MarkdownRenderer>
                       </div>
                     ))}
                   </div>
@@ -265,7 +266,7 @@ export default function InsuranceAnalysis({ insuranceInfo, bills, onInsuranceCha
 
               <div className="card">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Summary</h3>
-                <p className="text-gray-700">{analysis.summary}</p>
+                <MarkdownRenderer className="text-gray-700">{analysis.summary}</MarkdownRenderer>
               </div>
 
               {analysis.optimization_recommendations.length > 0 && (
@@ -286,7 +287,7 @@ export default function InsuranceAnalysis({ insuranceInfo, bills, onInsuranceCha
                           </span>
                           <span className="font-medium text-blue-900 capitalize">{rec.category}</span>
                         </div>
-                        <div className="text-sm text-blue-800 mt-2">{rec.description}</div>
+                        <MarkdownRenderer className="text-sm text-blue-800 mt-2">{rec.description}</MarkdownRenderer>
                       </div>
                     ))}
                   </div>
