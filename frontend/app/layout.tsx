@@ -8,10 +8,14 @@ import ToastProvider from '../components/providers/ToastProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "MedFin",
   description: "Autonomous Healthcare Financial Navigator",
-  icons: undefined,
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

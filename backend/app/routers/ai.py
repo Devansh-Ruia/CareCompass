@@ -382,43 +382,63 @@ async def upload_denial_letter(
     tone: str = Form("professional")
 ):
     """Upload a denial letter and generate appeal letter."""
-    if not gemini_service.is_configured():
-        raise HTTPException(status_code=503, detail="AI service not configured")
-    
-    import json
-    policy = json.loads(policy_data)
-    
-    content = await file.read()
-    image_base64 = base64.b64encode(content).decode()
-    
-    # First extract denial info from the image
-    denial_extraction_prompt = """Extract the following information from this denial letter image:
-    - denial_date (when the denial was sent)
-    - service_description (what was denied)
-    - service_date (date of service)
-    - amount_denied (numeric value)
-    - denial_reason (why they denied it)
-    - denial_code (if provided)
-    - insurer_name (insurance company name)
-    - claim_number (if provided)
-    
-    Return as JSON with these exact keys. Use null for any missing information."""
+    import logging
+    logger = logging.getLogger(__name__)
     
     try:
+        logger.info(f"[upload-denial] Starting upload process")
+        logger.info(f"[upload-denial] File: {file.filename}, Type: {file.content_type}")
+        
+        if not gemini_service.is_configured():
+            logger.error("[upload-denial] AI service not configured")
+            raise HTTPException(status_code=503, detail="AI service not configured")
+        
+        import json
+        policy = json.loads(policy_data)
+        logger.info(f"[upload-denial] Policy data parsed successfully")
+        
+        content = await file.read()
+        logger.info(f"[upload-denial] Read {len(content)} bytes from file")
+        
+        # Reset file pointer if needed
+        await file.seek(0)
+        
+        image_base64 = base64.b64encode(content).decode()
+        logger.info(f"[upload-denial] Content encoded to base64")
+        
+        # First extract denial info from image
+        denial_extraction_prompt = """Extract the following information from this denial letter image:
+        - denial_date (when the denial was sent)
+        - service_description (what was denied)
+        - service_date (date of service)
+        - amount_denied (numeric value)
+        - denial_reason (why they denied it)
+        - denial_code (if provided)
+        - insurer_name (insurance company name)
+        - claim_number (if provided)
+        
+        Return as JSON with these exact keys. Use null for any missing information."""
+        
+        logger.info("[upload-denial] Extracting denial information with vision model...")
         # Extract denial info using vision model
         response = await gemini_service.vision_model.generate_content([
             denial_extraction_prompt,
-            {"mime_type": "image/jpeg", "data": image_base64}
+            {"mime_type": file.content_type, "data": image_base64}
         ])
         
         text = response.text
+        logger.info(f"[upload-denial] Vision response received: {len(text)} characters")
+        
         start = text.find('{')
         end = text.rfind('}') + 1
         if start != -1 and end > start:
             denial_info = json.loads(text[start:end])
+            logger.info(f"[upload-denial] Successfully parsed denial info: {denial_info}")
         else:
+            logger.error(f"[upload-denial] Could not extract denial information from: {text}")
             raise Exception("Could not extract denial information")
         
+        logger.info("[upload-denial] Generating appeal letter...")
         # Generate appeal letter
         result = await gemini_service.generate_appeal_letter(
             denial_info,
@@ -426,12 +446,21 @@ async def upload_denial_letter(
             tone
         )
         
+        logger.info(f"[upload-denial] Appeal letter generated successfully")
+        
         if "error" in result:
+            logger.error(f"[upload-denial] Error in appeal generation: {result['error']}")
             raise HTTPException(status_code=500, detail=result["error"])
         
         # Include extracted denial info in response
         result["extracted_denial_info"] = denial_info
+        logger.info("[upload-denial] Upload process completed successfully")
         return result
         
+    except HTTPException as e:
+        logger.error(f"[upload-denial] HTTP Exception: {type(e).__name__}: {str(e)}")
+        raise
     except Exception as e:
+        logger.error(f"[upload-denial] FAILED: {type(e).__name__}: {str(e)}")
+        logger.exception("[upload-denial] Full traceback:")
         raise HTTPException(status_code=500, detail=f"Failed to process denial letter: {str(e)}")
