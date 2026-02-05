@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Request
+from pydantic import BaseModel, validator
 from typing import Optional, List, Dict, Any
 import base64
 import json
@@ -8,21 +8,59 @@ import traceback
 import io
 import PyPDF2
 from PIL import Image
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from ..services.gemini_service import gemini_service
+from ..security import (
+    limiter, validate_file, sanitize_input, 
+    validate_question_input, log_security_event,
+    RATE_LIMITS
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 class PolicyTextRequest(BaseModel):
     policy_text: str
+    
+    @validator('policy_text')
+    def validate_policy_text(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Policy text cannot be empty')
+        if len(v.strip()) < 100:
+            raise ValueError('Policy text too short to be valid')
+        if len(v) > 50000:  # 50KB limit
+            raise ValueError('Policy text too long')
+        return sanitize_input(v)
 
 class QuestionRequest(BaseModel):
     question: str
     policy_data: Dict[str, Any]
     conversation_history: Optional[List[Dict[str, str]]] = None
+    
+    @validator('question')
+    def validate_question(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Question cannot be empty')
+        if len(v.strip()) < 3:
+            raise ValueError('Question too short')
+        if len(v) > 1000:
+            raise ValueError('Question too long')
+        return sanitize_input(v)
 
 class BillValidationRequest(BaseModel):
     bill_image_base64: str
     policy_data: Dict[str, Any]
+    
+    @validator('bill_image_base64')
+    def validate_base64(cls, v):
+        if not v:
+            raise ValueError('Bill image cannot be empty')
+        # Basic base64 validation
+        try:
+            base64.b64decode(v)
+        except Exception:
+            raise ValueError('Invalid base64 format')
+        return v
 
 class OptimizationRequest(BaseModel):
     policy_data: Dict[str, Any]
@@ -32,11 +70,25 @@ class PreVisitRequest(BaseModel):
     visit_type: str
     policy_data: Dict[str, Any]
     provider_info: Optional[Dict[str, Any]] = None
+    
+    @validator('visit_type')
+    def validate_visit_type(cls, v):
+        valid_types = ['primary_care', 'specialist', 'emergency', 'urgent_care', 'surgery', 'imaging', 'lab_work']
+        if v not in valid_types:
+            raise ValueError(f'Invalid visit type. Must be one of: {valid_types}')
+        return v
 
 class AppealRequest(BaseModel):
     denial_info: Dict[str, Any]
     policy_data: Dict[str, Any]
     tone: str = "professional"
+    
+    @validator('tone')
+    def validate_tone(cls, v):
+        valid_tones = ['professional', 'emphatic', 'detailed', 'concise']
+        if v not in valid_tones:
+            raise ValueError(f'Invalid tone. Must be one of: {valid_tones}')
+        return v
 
 @router.get("/health")
 async def ai_health():
@@ -66,23 +118,36 @@ async def list_models():
         return {"error": str(e)}
 
 @router.post("/analyze-policy")
-async def analyze_policy(request: PolicyTextRequest):
+@limiter.limit("10/minute")
+async def analyze_policy(request: PolicyTextRequest, http_request: Request):
     """Analyze insurance policy text and extract all parameters."""
     if not gemini_service.is_configured():
         raise HTTPException(status_code=503, detail="AI service not configured")
     
-    result = await gemini_service.analyze_insurance_policy(request.policy_text)
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    return result
+    try:
+        result = await gemini_service.analyze_insurance_policy(request.policy_text)
+        if "error" in result:
+            log_security_event("ai_analysis_failed", {"error": result["error"]}, http_request)
+            raise HTTPException(status_code=500, detail=result["error"])
+        return result
+    except Exception as e:
+        log_security_event("ai_analysis_error", {"error": str(e)}, http_request)
+        raise HTTPException(status_code=500, detail="Policy analysis failed")
 
 @router.post("/upload-policy")
-async def upload_policy(file: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def upload_policy(file: UploadFile = File(...), http_request: Request = None):
     """Upload and analyze a policy document (PDF or image)."""
     import logging
     logger = logging.getLogger(__name__)
     
     logger.info(f"Received file upload: {file.filename}, content_type: {file.content_type}")
+    
+    # Validate file security
+    validation_result = validate_file(file)
+    if not validation_result['valid']:
+        log_security_event("file_upload_rejected", validation_result, http_request)
+        raise HTTPException(status_code=400, detail=validation_result['error'])
     
     if not gemini_service.is_configured():
         raise HTTPException(status_code=503, detail="AI service not configured")
@@ -168,19 +233,25 @@ async def upload_policy(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to process policy: {str(e)}")
 
 @router.post("/ask-question")
-async def ask_policy_question(request: QuestionRequest):
+@limiter.limit("30/minute")
+async def ask_policy_question(request: QuestionRequest, http_request: Request):
     """Ask a question about the insurance policy."""
     if not gemini_service.is_configured():
         raise HTTPException(status_code=503, detail="AI service not configured")
     
-    result = await gemini_service.answer_policy_question(
-        request.question,
-        request.policy_data,
-        request.conversation_history
-    )
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
-    return result
+    try:
+        result = await gemini_service.answer_policy_question(
+            request.question,
+            request.policy_data,
+            request.conversation_history
+        )
+        if "error" in result:
+            log_security_event("question_failed", {"error": result["error"]}, http_request)
+            raise HTTPException(status_code=500, detail=result["error"])
+        return result
+    except Exception as e:
+        log_security_event("question_error", {"error": str(e)}, http_request)
+        raise HTTPException(status_code=500, detail="Failed to process question")
 
 @router.post("/validate-bill")
 async def validate_bill(request: BillValidationRequest):

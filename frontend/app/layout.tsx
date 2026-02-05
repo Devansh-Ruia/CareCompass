@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { SavingsProvider } from '../contexts/SavingsContext'
 import { FamilyProvider } from '../contexts/FamilyContext'
+import ErrorBoundary from '../components/ErrorBoundary'
+import ToastProvider from '../components/providers/ToastProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -20,11 +22,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <FamilyProvider>
-          <SavingsProvider>
-            {children}
-          </SavingsProvider>
-        </FamilyProvider>
+        <ToastProvider>
+          <ErrorBoundary>
+            <FamilyProvider>
+              <SavingsProvider>
+                {children}
+              </SavingsProvider>
+            </FamilyProvider>
+          </ErrorBoundary>
+        </ToastProvider>
       </body>
     </html>
   )
