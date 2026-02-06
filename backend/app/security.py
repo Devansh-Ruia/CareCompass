@@ -8,7 +8,7 @@ import re
 import uuid
 from pathlib import Path
 from typing import Optional
-import bleach
+import nh3
 from fastapi import HTTPException, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -38,7 +38,7 @@ def sanitize_input(text: str) -> str:
         return ""
     
     # Remove potentially dangerous characters
-    cleaned = bleach.clean(
+    cleaned = nh3.clean(
         text, 
         strip=True,
         tags=[],
