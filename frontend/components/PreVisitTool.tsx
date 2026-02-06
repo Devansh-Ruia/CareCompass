@@ -10,16 +10,16 @@ interface PreVisitToolProps {
 }
 
 const visitTypes = [
-  'Primary Care / Routine Checkup',
-  'Specialist Visit (specify type)',
-  'Lab Work / Blood Tests',
-  'Imaging (X-ray, MRI, CT)',
-  'Surgery / Procedure (specify)',
-  'Emergency Room',
-  'Urgent Care',
-  'Mental Health / Therapy',
-  'Physical Therapy',
-  'Dental / Vision'
+  { label: "Primary Care / Routine Checkup", value: "primary_care" },
+  { label: "Specialist Visit (specify type)", value: "specialist" },
+  { label: "Lab Work / Blood Tests", value: "lab_work" },
+  { label: "Imaging (X-ray, MRI, CT)", value: "imaging" },
+  { label: "Surgery / Procedure (specify)", value: "surgery" },
+  { label: "Emergency Room", value: "emergency" },
+  { label: "Urgent Care", value: "urgent_care" },
+  { label: "Mental Health / Therapy", value: "mental_health" },
+  { label: "Physical Therapy", value: "physical_therapy" },
+  { label: "Dental / Vision", value: "dental_vision" }
 ];
 
 export default function PreVisitTool({ policyData }: PreVisitToolProps) {
@@ -39,7 +39,7 @@ export default function PreVisitTool({ policyData }: PreVisitToolProps) {
       return;
     }
 
-    const actualVisitType = visitType.includes('(specify type)') && customVisitType 
+    const actualVisitType = visitType === 'specialist' && customVisitType 
       ? customVisitType 
       : visitType;
 
@@ -109,11 +109,11 @@ export default function PreVisitTool({ policyData }: PreVisitToolProps) {
               >
                 <option value="">Select a visit type...</option>
                 {visitTypes.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
               
-              {visitType.includes('(specify type)') && (
+              {visitType === 'specialist' && (
                 <input
                   type="text"
                   value={customVisitType}

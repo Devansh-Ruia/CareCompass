@@ -74,9 +74,20 @@ class PreVisitRequest(BaseModel):
     @validator('visit_type')
     def validate_visit_type(cls, v):
         valid_types = ['primary_care', 'specialist', 'emergency', 'urgent_care', 'surgery', 'imaging', 'lab_work']
-        if v not in valid_types:
-            raise ValueError(f'Invalid visit type. Must be one of: {valid_types}')
-        return v
+        
+        # Normalize: lowercase, strip, replace spaces/slashes with underscores
+        normalized = v.lower().strip().split('/')[0].strip().replace(' ', '_')
+        
+        # Try to match against valid types
+        if normalized in valid_types:
+            return normalized
+        
+        # Fuzzy match: check if any valid type is contained in input
+        for vt in valid_types:
+            if vt in normalized or normalized in vt:
+                return vt
+        
+        raise ValueError(f'Invalid visit type. Must be one of: {valid_types}')
 
 class AppealRequest(BaseModel):
     denial_info: Dict[str, Any]
