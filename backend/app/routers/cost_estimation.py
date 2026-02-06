@@ -5,7 +5,7 @@ from ..services.cost_estimator import cost_estimator
 from ..core.models import InsuranceInfo, CostEstimate
 
 
-router = APIRouter(prefix="/cost", tags=["cost"])
+router = APIRouter(tags=["cost"])
 
 
 class CostEstimateRequest(BaseModel):

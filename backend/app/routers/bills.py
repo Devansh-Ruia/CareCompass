@@ -5,7 +5,7 @@ from ..services.bill_analyzer import bill_analyzer
 from ..core.models import MedicalBill, BillAnalysisIssue
 
 
-router = APIRouter(prefix="/bills", tags=["bills"])
+router = APIRouter(tags=["bills"])
 
 
 class BillAnalysisRequest(BaseModel):

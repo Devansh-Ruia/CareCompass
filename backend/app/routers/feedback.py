@@ -7,7 +7,7 @@ import logging
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-router = APIRouter(prefix="/feedback", tags=["feedback"])
+router = APIRouter(tags=["feedback"])
 limiter = Limiter(key_func=get_remote_address)
 logger = logging.getLogger(__name__)
 

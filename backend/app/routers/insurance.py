@@ -5,7 +5,7 @@ from ..services.insurance_analyzer import insurance_analyzer
 from ..core.models import InsuranceInfo, MedicalBill
 
 
-router = APIRouter(prefix="/insurance", tags=["insurance"])
+router = APIRouter(tags=["insurance"])
 
 
 class InsuranceAnalysisRequest(BaseModel):

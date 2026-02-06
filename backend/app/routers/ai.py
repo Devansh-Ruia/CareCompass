@@ -17,7 +17,7 @@ from ..security import (
     RATE_LIMITS
 )
 
-router = APIRouter(prefix="/ai", tags=["ai"])
+router = APIRouter(tags=["ai"])
 
 class PolicyTextRequest(BaseModel):
     policy_text: str
@@ -103,17 +103,21 @@ async def ai_health():
 async def list_models():
     """List available Gemini models."""
     try:
-        import google.generativeai as genai
-        models = []
-        for model in genai.list_models():
-            if 'generateContent' in model.supported_generation_methods:
-                models.append({
-                    "name": model.name,
-                    "display_name": model.display_name,
-                    "description": model.description[:100] if model.description else None,
-                    "input_token_limit": model.input_token_limit,
-                })
-        return {"models": models}
+        # Since we're using the new SDK through gemini_service, return the model we're using
+        if gemini_service.is_configured():
+            return {
+                "models": [
+                    {
+                        "name": "gemini-2.5-flash",
+                        "display_name": "Gemini 2.5 Flash",
+                        "description": "Fast and efficient multimodal model",
+                        "input_token_limit": 1048576,  # 1M tokens
+                        "supported_generation_methods": ["generateContent"]
+                    }
+                ]
+            }
+        else:
+            return {"models": [], "error": "AI service not configured"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -185,19 +189,26 @@ async def upload_policy(request: Request, file: UploadFile = File(...)):
                 logger.error(f"PDF extraction failed: {pdf_error}")
                 raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(pdf_error)}")
         else:
-            # For images, use Gemini's vision capability
+            # For images, use Gemini's vision capability through gemini_service
             logger.info("Processing image file")
             try:
                 from PIL import Image
                 image = Image.open(io.BytesIO(content))
                 logger.info(f"Image size: {image.size}, format: {image.format}")
                 
-                # Use the vision model from gemini_service
-                import google.genai as genai
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                # Convert image to base64 for gemini_service
+                import base64
+                image_buffer = io.BytesIO()
+                image.save(image_buffer, format=image.format or 'PNG')
+                image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+                
+                # Use gemini_service to extract text from image
+                text_extraction_prompt = "Extract all text from this insurance policy document. Return only the extracted text, nothing else."
+                
+                model = gemini_service.client.GenerativeModel('gemini-2.5-flash')
                 response = model.generate_content([
-                    "Extract all text from this insurance policy document. Return only the extracted text, nothing else.",
-                    image
+                    text_extraction_prompt,
+                    {"mime_type": f"image/{image.format.lower()}", "data": image_base64}
                 ])
                 policy_text = response.text
                 logger.info(f"Extracted {len(policy_text)} characters from image")
@@ -421,7 +432,8 @@ async def upload_denial_letter(
         
         logger.info("[upload-denial] Extracting denial information with vision model...")
         # Extract denial info using vision model
-        response = await gemini_service.vision_model.generate_content([
+        model = gemini_service.client.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content([
             denial_extraction_prompt,
             {"mime_type": file.content_type, "data": image_base64}
         ])

@@ -1,4 +1,4 @@
-import google.genai as genai
+import google.generativeai as genai
 import os
 import json
 import base64
@@ -12,7 +12,8 @@ class GeminiService:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
-            self.client = genai.Client(api_key=api_key)
+            genai.configure(api_key=api_key)
+            self.client = genai
         else:
             self.client = None
     
@@ -84,9 +85,9 @@ POLICY DOCUMENT:
 """
         
         try:
-            response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt + policy_text,
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(
+                prompt + policy_text,
                 generation_config=genai.types.GenerationConfig(
                     response_mime_type="application/json"
                 )
@@ -294,9 +295,9 @@ If you cannot read the bill, return the JSON structure with null/empty values an
             # Step 3: Call Gemini Vision API
             logger.info("Step 3: Calling Gemini Vision API")
             try:
-                response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[prompt, genai.types.Part.from_data(data=image_data, mime_type=image.format.lower())],
+                model = genai.GenerativeModel('gemini-2.5-flash')
+                response = model.generate_content(
+                    [prompt, image],
                     generation_config=genai.types.GenerationConfig(
                         temperature=0.1,  # Lower temperature for more consistent JSON
                     )
@@ -445,7 +446,8 @@ Return as JSON:
 """
         
         try:
-            response = self.client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             text = response.text
             
             start = text.find('{')
@@ -534,7 +536,8 @@ Return as JSON:
 """
         
         try:
-            response = self.client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             text = response.text
             
             start = text.find('{')
@@ -600,7 +603,8 @@ IMPORTANT GUIDELINES:
 """
         
         try:
-            response = self.client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             text = response.text
             
             start = text.find('{')
@@ -674,7 +678,8 @@ IMPORTANT GUIDELINES:
 """
         
         try:
-            response = self.client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(prompt)
             text = response.text
             
             start = text.find('{')

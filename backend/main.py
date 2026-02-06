@@ -51,8 +51,8 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="Healthcare Financial Navigator API",
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
     default_response_class=ORJSONResponse,
     lifespan=lifespan,
 )
