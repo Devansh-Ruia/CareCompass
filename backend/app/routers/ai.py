@@ -136,7 +136,7 @@ async def analyze_policy(request: PolicyTextRequest, http_request: Request):
 
 @router.post("/upload-policy")
 @limiter.limit("10/minute")
-async def upload_policy(file: UploadFile = File(...), http_request: Request = None):
+async def upload_policy(request: Request, file: UploadFile = File(...)):
     """Upload and analyze a policy document (PDF or image)."""
     import logging
     logger = logging.getLogger(__name__)
@@ -193,7 +193,7 @@ async def upload_policy(file: UploadFile = File(...), http_request: Request = No
                 logger.info(f"Image size: {image.size}, format: {image.format}")
                 
                 # Use the vision model from gemini_service
-                import google.generativeai as genai
+                import google.genai as genai
                 model = genai.GenerativeModel('gemini-2.5-flash')
                 response = model.generate_content([
                     "Extract all text from this insurance policy document. Return only the extracted text, nothing else.",
