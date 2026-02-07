@@ -71,15 +71,6 @@ if settings.environment == "production":
 # Performance middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
-)
-
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
@@ -156,6 +147,21 @@ async def log_requests(request: Request, call_next):
             exc_info=True,
         )
         raise
+
+
+# CORS must be added LAST so it's the outermost middleware
+# Ensure the Vercel frontend URL is always included
+origins = settings.allowed_origins
+if "https://medfin-phi.vercel.app" not in origins:
+    origins.append("https://medfin-phi.vercel.app")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 # Enhanced global exception handler

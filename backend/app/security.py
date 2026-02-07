@@ -18,7 +18,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Rate limiter
-limiter = Limiter(key_func=get_remote_address)
+def get_rate_limit_key(request: Request):
+    """Get rate limit key, but exclude OPTIONS requests (preflight)"""
+    if request.method == "OPTIONS":
+        return None  # Don't rate limit OPTIONS requests
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=get_rate_limit_key)
 
 # Security constants
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
